@@ -12,6 +12,8 @@ import os
 import time
 
 import gestureCNN as myNN
+import pdb
+
 
 minValue = 70
 
@@ -153,6 +155,7 @@ def binaryMask(frame, x0, y0, width, height ):
 
 #%%
 def Main():
+    # pdb.set_trace()
     global guessGesture, visualize, mod, binaryMode, x0, y0, width, height, saveImg, gestname, path
     quietMode = False
     
@@ -166,15 +169,18 @@ def Main():
     while True:
         ans = int(raw_input( banner))
         if ans == 2:
+            # 训练模型
             mod = myNN.loadCNN(-1)
             myNN.trainModel(mod)
             raw_input("Press any key to continue")
             break
         elif ans == 1:
+            # 使用已有模型
             print "Will load default weight file"
             mod = myNN.loadCNN(0)
             break
         elif ans == 3:
+            # 打印某张手势图片经过每层的处理
             if not mod:
                 w = int(raw_input("Which weight file to load (0 or 1)"))
                 mod = myNN.loadCNN(w)
@@ -206,6 +212,7 @@ def Main():
         frame = cv2.flip(frame, 3)
         
         if ret == True:
+            # ! 其间 可以做保存图片的操作
             if binaryMode == True:
                 roi = binaryMask(frame, x0, y0, width, height)
             else:
@@ -222,8 +229,8 @@ def Main():
         ## If enabled will stop updating the main openCV windows
         ## Way to reduce some processing power :)
         if not quietMode:
-            cv2.imshow('Original',frame)
-            cv2.imshow('ROI', roi)
+            cv2.imshow('Original',frame) # 图像窗口
+            cv2.imshow('ROI', roi) # 截取手势窗口
         
         # Keyboard inputs
         key = cv2.waitKey(10) & 0xff
@@ -247,7 +254,7 @@ def Main():
         
         ## This option is not yet complete. So disabled for now
         ## Use v key to visualize layers
-        #elif key == ord('v'):
+        # elif key == ord('v'):
         #    visualize = True
 
         ## Use i,j,k,l to adjust ROI window
@@ -271,6 +278,7 @@ def Main():
             saveImg = not saveImg
             
             if gestname != '':
+                # 保存图片操作 binaryMask 或 skinMask 步骤操作
                 saveImg = True
             else:
                 print "Enter a gesture group name first, by pressing 'n'"
@@ -278,6 +286,7 @@ def Main():
         
         ## Use n key to enter gesture name
         elif key == ord('n'):
+            # 获取 手势名称 建立文件夹，然后会自动保存图片 到该目录
             gestname = raw_input("Enter the gesture folder name: ")
             try:
                 os.makedirs(gestname)

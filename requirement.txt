@@ -1,0 +1,10 @@
+keras
+opencv-python
+numpy 
+matplotlib
+PIL
+tensorflow>=1.0.1
+h5py # conda
+theano
+pydot
+graphviz

@@ -6,6 +6,13 @@ Created on Thu Apr  6 01:01:43 2017
 @author: abhisheksingh
 """
 
+import warnings as w
+w.simplefilter(action = 'ignore', category = FutureWarning)
+w.resetwarnings()
+
+import pdb
+
+
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D
@@ -29,7 +36,10 @@ import json
 import cv2
 import matplotlib
 #matplotlib.use("TkAgg")
+
+# ! 暂是错误的
 from matplotlib import pyplot as plt
+
 
 
 # input image dimensions
@@ -41,7 +51,8 @@ img_channels = 1
 
 
 # Batch_size to train
-batch_size = 32
+batch_size = 32   # 0.9949
+# batch_size = 1
 
 ## Number of output classes (change it accordingly)
 ## eg: In my case I wanted to predict 4 types of gestures (Ok, Peace, Punch, Stop)
@@ -49,7 +60,9 @@ batch_size = 32
 nb_classes = 5
 
 # Number of epochs to train (change it accordingly)
+# nb_epoch = 15  #25
 nb_epoch = 15  #25
+# nb_epoch = 1  #25
 
 # Total number of convolutional filters to use
 nb_filters = 32
@@ -67,9 +80,12 @@ path1 = "./gestures"    #path of folder of images
 path2 = './imgfolder_b'
 
 WeightFileName = ["ori_4015imgs_weights.hdf5","bw_4015imgs_weights.hdf5","bw_2510imgs_weights.hdf5","./bw_weight.hdf5","./final_c_weights.hdf5","./semiVgg_1_weights.hdf5","/new_wt_dropout20.hdf5","./weights-CNN-gesture_skinmask.hdf5"]
+WeightFileName = ["my_weight.hdf5","bw_4015imgs_weights.hdf5","bw_2510imgs_weights.hdf5","./bw_weight.hdf5","./final_c_weights.hdf5","./semiVgg_1_weights.hdf5","/new_wt_dropout20.hdf5","./weights-CNN-gesture_skinmask.hdf5"]
 
 # outputs
-output = ["OK", "NOTHING","PEACE", "PUNCH", "STOP"]
+'''验证后，发现output 更改顺序后，手势识别也会变化'''
+# output = ["OK", "NOTHING", "PEACE", "PUNCH", "STOP"] # 正确的
+output = ["STOP", "NOTHING", "OK", "PUNCH", "PEACE"]
 #output = ["PEACE", "STOP", "THUMBSDOWN", "THUMBSUP"]
 
 
@@ -102,25 +118,44 @@ def modlistdir(path):
 # Load CNN model
 def loadCNN(wf_index):
     global get_output
+    '''
+    以 new_model.png 作为参考图对照着看这块
+    '''
+    # 序贯模型是多个网络层的线性堆叠，也就是“一条路走到黑”
     model = Sequential()
     
-    
+    # 卷积层
     model.add(Conv2D(nb_filters, (nb_conv, nb_conv),
                         padding='valid',
                         input_shape=(img_channels, img_rows, img_cols)))
+    # 激活函数：对一个层输出进行激活，使神经网络具备了分层的非线性映射学习能力
+    '''激活函数 较好的文章：https://blog.csdn.net/u014595019/article/details/52562159'''
     convout1 = Activation('relu')
+    # 卷积层
     model.add(convout1)
+    # 卷积层
     model.add(Conv2D(nb_filters, (nb_conv, nb_conv)))
+    # 激活函数：对一个层输出进行激活，使神经网络具备了分层的非线性映射学习能力
     convout2 = Activation('relu')
     model.add(convout2)
+    # 最大池化：对傅里叶变换进行池化： 
+    # 减少每个filter后的特征值，最大或者平均值；
+    # 例如 https://blog.csdn.net/u010402786/article/details/51541465
+    # 例如：对于一个 96X96 像素的图像，假设我们已经学习得到了400个定义在8X8输入上的特征，每一个特征和图像卷积都会得到一个 (96 − 8 + 1) * (96 − 8 + 1) = 7921 维的卷积特征，由于有 400 个特征，所以每个样本都会得到一个 892 * 400 = 3,168,400 维的卷积特征向量。学习一个拥有超过 3 百万特征输入的分类器十分不便，并且容易出现过拟合 (over-fitting)。
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+    # 随机断开输入神经元，防止过拟合
     model.add(Dropout(0.5))
-
+    # 扁平化为一维
     model.add(Flatten())
+    # 神经元 全链接
     model.add(Dense(128))
+    # 激活函数：对一个层输出进行激活，使神经网络具备了分层的非线性映射学习能力
     model.add(Activation('relu'))
+    # 随机断开输入神经元，防止过拟合
     model.add(Dropout(0.5))
+    # 因为有 5种手势分类，所以 分了 5个
     model.add(Dense(nb_classes))
+    # 神经网络多分类输出：总和为1，各分类小于1
     model.add(Activation('softmax'))
     
     '''
@@ -154,6 +189,7 @@ def loadCNN(wf_index):
     model.add(Activation('softmax'))
     '''
     
+    # 损失函数：实测数据和预测数据的差距
     #sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer='adadelta', metrics=['accuracy'])
     
@@ -174,11 +210,15 @@ def loadCNN(wf_index):
         model.load_weights(fname)
     
     layer = model.layers[11]
+    # K.function 实例化一个Keras函数
     get_output = K.function([model.layers[0].input, K.learning_phase()], [layer.output,])
+    print('get_output: ', get_output);
     
-    
+    # print 'model:',model
+    # pdb.set_trace()
     return model
 
+# 根据模型判断手势
 # This function does the guessing work based on input images
 def guessGesture(model, img):
     global output, get_output
@@ -207,6 +247,8 @@ def guessGesture(model, img):
     
     d = {}
     i = 0
+    # !!!!!!!!!!!!!!!!!!!!!!!
+    # todo 为什么知道 prob_array 和 output 的手势名称对应上？
     for items in output:
         d[items] = prob_array[0][i] * 100
         i += 1
@@ -232,6 +274,9 @@ def guessGesture(model, img):
     else:
         return 1
 
+# !只在训练新模型时才会执行
+
+# !使用 imgfolder_b 的图片训练新的模型  总共有 4016 张
 #%%
 def initializers():
     imlist = modlistdir(path2)
@@ -247,8 +292,8 @@ def initializers():
                          for images in sorted(imlist)], dtype = 'f')
     
 
-    
-    print immatrix.shape
+    # 应该是个二维的数据 [4016,[图片flatten list 长度]]
+    print immatrix.shape 
     
     raw_input("Press any key")
     
@@ -267,14 +312,16 @@ def initializers():
         r = s + samples_per_class
     
     '''
+    该处的图片输入，和 output 的手势对应顺序；
     # eg: For 301 img samples/gesture for 4 gesture types
     label[0:301]=0
     label[301:602]=1
     label[602:903]=2
     label[903:]=3
     '''
-    
+    # 打乱 list 的顺序
     data,Label = shuffle(immatrix,label, random_state=2)
+    
     train_data = [data,Label]
      
     (X, y) = (train_data[0],train_data[1])
@@ -289,7 +336,8 @@ def initializers():
      
     X_train = X_train.astype('float32')
     X_test = X_test.astype('float32')
-     
+    
+    # 变成黑白色
     # normalize
     X_train /= 255
     X_test /= 255
@@ -310,6 +358,7 @@ def trainModel(model):
     hist = model.fit(X_train, Y_train, batch_size=batch_size, epochs=nb_epoch,
                  verbose=1, validation_split=0.2)
 
+    # ! matplotlib 报错，暂不执行
     visualizeHis(hist)
 
     ans = raw_input("Do you want to save the trained weights - y/n ?")
